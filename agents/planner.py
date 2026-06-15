@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from .state import AgentState
 from .logging_config import logger
+from .retry import with_retry, RetryConfig
 
 _llm = ChatAnthropic(model="claude-opus-4-8", temperature=0)
 
@@ -25,6 +26,7 @@ Rules:
 """
 
 
+@with_retry(RetryConfig(max_retries=3, initial_delay=1.0))
 def planner_node(state: AgentState) -> dict:
     query = state["query"]
     logger.info(f"Planning query: {query}")

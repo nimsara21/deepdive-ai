@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from .state import AgentState
 from .logging_config import logger
+from .retry import with_retry, RetryConfig
 
 _llm = ChatAnthropic(model="claude-opus-4-8", temperature=0)
 
@@ -47,6 +48,7 @@ def _build_context(state: AgentState) -> str:
     return "\n".join(lines), all_sources
 
 
+@with_retry(RetryConfig(max_retries=3, initial_delay=1.0))
 def summarizer_node(state: AgentState) -> dict:
     logger.info(f"Summarizing {len(state['search_results'])} search results")
     context, sources = _build_context(state)

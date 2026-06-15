@@ -3,10 +3,12 @@ from tavily import TavilyClient
 
 from .state import AgentState, SearchResult
 from .logging_config import logger
+from .retry import with_retry, RetryConfig
 
 _client = TavilyClient()  # reads TAVILY_API_KEY from environment
 
 
+@with_retry(RetryConfig(max_retries=3, initial_delay=1.0))
 def search_node(state: AgentState) -> dict:
     """
     Called once per sub-question via LangGraph Send.
@@ -16,16 +18,12 @@ def search_node(state: AgentState) -> dict:
     sub_question = state["sub_questions"][0]
     logger.info(f"Searching: {sub_question}")
 
-    try:
-        response = _client.search(
-            query=sub_question,
-            max_results=5,
-            search_depth="advanced",
-            include_answer=True,
-        )
-    except Exception as e:
-        logger.error(f"Search failed for '{sub_question}': {e}")
-        raise
+    response = _client.search(
+        query=sub_question,
+        max_results=5,
+        search_depth="advanced",
+        include_answer=True,
+    )
 
     sources = [r["url"] for r in response.get("results", [])]
     content_parts = []

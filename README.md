@@ -121,13 +121,17 @@ deepdive-ai/
 │   ├── search.py         # Parallel Tavily search nodes
 │   ├── summarizer.py     # Result synthesis node
 │   ├── graph.py          # LangGraph wiring
+│   ├── cache.py          # Response caching with TTL
+│   ├── retry.py          # Exponential backoff retry logic
 │   └── logging_config.py # Structured logging
 ├── api/
 │   └── main.py           # FastAPI app
 ├── tests/
 │   ├── conftest.py       # Pytest fixtures
 │   ├── test_planner.py   # Planner unit tests
-│   └── test_search.py    # Search unit tests
+│   ├── test_search.py    # Search unit tests
+│   ├── test_cache.py     # Cache unit tests
+│   └── test_retry.py     # Retry logic unit tests
 ├── requirements.txt
 ├── .env.example
 ├── Dockerfile
@@ -203,6 +207,37 @@ Set these in `.env`:
 - `CACHE_TTL_SECONDS=3600` — How long to keep results (default 1 hour)
 - `CACHE_MAX_SIZE=100` — Maximum cached queries (default 100)
 
+## Retry Logic
+
+API calls are automatically retried on transient failures with exponential backoff.
+
+**Retryable errors:**
+- Timeouts
+- Rate limits (429)
+- Temporary unavailability (502, 503)
+- Connection errors
+
+**Non-retryable errors (fail immediately):**
+- Authentication failures
+- Invalid input
+- 404 Not Found
+- Other permanent errors
+
+**Retry behavior:**
+- Up to 3 retry attempts per call (configurable)
+- Initial delay: 1 second, doubles on each retry (1s → 2s → 4s)
+- Maximum delay: 60 seconds
+- Jitter added to prevent thundering herd
+
+**Example log output:**
+```
+[WARN] search_node attempt 1/4 failed: Timeout. Retrying in 1.05s...
+[WARN] search_node attempt 2/4 failed: Timeout. Retrying in 2.08s...
+[INFO] Found 5 sources for: What is machine learning?
+```
+
+Retry configuration is built-in with sensible defaults. For custom retry behavior, edit `RetryConfig` in `agents/retry.py`.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -216,10 +251,10 @@ Set these in `.env`:
 ## Next Steps / Future Improvements
 
 - [x] Response caching — cache recent queries with TTL
+- [x] Better error recovery — retry logic with exponential backoff for transient failures
 - [ ] Streaming responses — stream the final answer as it's generated
 - [ ] Configuration file — move hardcoded values (model names, search depth) to `config.yaml`
 - [ ] Conversation history — accept `previous_context` to enable follow-up questions
-- [ ] Better error recovery — retry logic with exponential backoff for transient failures
 - [ ] Source ranking — deduplicate and rank sources by relevance/authority
 - [ ] Metrics/tracing — emit latency and token-usage metrics for monitoring
 - [ ] Redis caching — scale caching across multiple workers with Redis backend
