@@ -97,6 +97,20 @@ curl -X POST http://localhost:8000/research \
 
 Returns `{"status": "ok"}` for healthchecks.
 
+### `GET /cache/stats`
+
+Get cache statistics:
+```json
+{"size": 5, "max_size": 100, "ttl_seconds": 3600}
+```
+
+### `DELETE /cache`
+
+Clear all cached entries:
+```json
+{"message": "Cache cleared"}
+```
+
 ## Project Structure
 
 ```
@@ -165,6 +179,30 @@ Logs are written to stdout with timestamps and levels:
 
 To adjust log level, set `DEEPDIVE_LOG_LEVEL=DEBUG` in `.env`.
 
+## Caching
+
+By default, research results are cached in-memory with a 1-hour TTL (time-to-live). Identical queries return cached results instantly.
+
+**Cache behavior:**
+- **Query normalization** — `"What is AI?"` and `"  what is ai?  "` are treated as the same query
+- **TTL** — Cached entries expire after the configured TTL; expired entries are removed on access
+- **Size limit** — When the cache reaches max capacity, the oldest entry is evicted
+- **Lookup speed** — Queries are hashed for O(1) lookup
+
+**Control caching:**
+```bash
+# Check cache stats
+curl http://localhost:8000/cache/stats
+
+# Clear cache
+curl -X DELETE http://localhost:8000/cache
+```
+
+**Configure caching:**
+Set these in `.env`:
+- `CACHE_TTL_SECONDS=3600` — How long to keep results (default 1 hour)
+- `CACHE_MAX_SIZE=100` — Maximum cached queries (default 100)
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -172,16 +210,19 @@ To adjust log level, set `DEEPDIVE_LOG_LEVEL=DEBUG` in `.env`.
 | `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for Claude |
 | `TAVILY_API_KEY` | Yes | — | Tavily Search API key |
 | `DEEPDIVE_LOG_LEVEL` | No | `INFO` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `CACHE_TTL_SECONDS` | No | `3600` | Cache entry lifetime in seconds (1 hour) |
+| `CACHE_MAX_SIZE` | No | `100` | Maximum number of cached queries |
 
 ## Next Steps / Future Improvements
 
+- [x] Response caching — cache recent queries with TTL
 - [ ] Streaming responses — stream the final answer as it's generated
-- [ ] Response caching — cache recent queries with TTL
 - [ ] Configuration file — move hardcoded values (model names, search depth) to `config.yaml`
 - [ ] Conversation history — accept `previous_context` to enable follow-up questions
 - [ ] Better error recovery — retry logic with exponential backoff for transient failures
 - [ ] Source ranking — deduplicate and rank sources by relevance/authority
 - [ ] Metrics/tracing — emit latency and token-usage metrics for monitoring
+- [ ] Redis caching — scale caching across multiple workers with Redis backend
 
 ## License
 
