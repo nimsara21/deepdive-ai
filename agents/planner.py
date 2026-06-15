@@ -1,8 +1,10 @@
 import json
+import logging
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .state import AgentState
+from .logging_config import logger
 
 _llm = ChatAnthropic(model="claude-opus-4-8", temperature=0)
 
@@ -25,6 +27,7 @@ Rules:
 
 def planner_node(state: AgentState) -> dict:
     query = state["query"]
+    logger.info(f"Planning query: {query}")
 
     response = _llm.invoke([
         SystemMessage(content=_SYSTEM),
@@ -38,7 +41,12 @@ def planner_node(state: AgentState) -> dict:
         if text.startswith("json"):
             text = text[4:]
 
-    parsed = json.loads(text.strip())
-    sub_questions: list[str] = parsed["sub_questions"]
+    try:
+        parsed = json.loads(text.strip())
+        sub_questions: list[str] = parsed["sub_questions"]
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.error(f"Failed to parse planner response: {e}")
+        raise ValueError(f"Invalid planner response: {e}") from e
 
+    logger.info(f"Generated {len(sub_questions)} sub-questions: {sub_questions}")
     return {"sub_questions": sub_questions}

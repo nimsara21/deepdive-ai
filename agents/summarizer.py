@@ -1,7 +1,9 @@
+import logging
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .state import AgentState
+from .logging_config import logger
 
 _llm = ChatAnthropic(model="claude-opus-4-8", temperature=0)
 
@@ -46,6 +48,7 @@ def _build_context(state: AgentState) -> str:
 
 
 def summarizer_node(state: AgentState) -> dict:
+    logger.info(f"Summarizing {len(state['search_results'])} search results")
     context, sources = _build_context(state)
 
     response = _llm.invoke([
@@ -53,6 +56,7 @@ def summarizer_node(state: AgentState) -> dict:
         HumanMessage(content=context),
     ])
 
+    logger.info(f"Generated final answer with {len(sources)} sources")
     return {
         "final_answer": response.content,
         "sources": sources,

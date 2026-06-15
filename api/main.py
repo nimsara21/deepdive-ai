@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -7,6 +8,7 @@ from pydantic import BaseModel
 load_dotenv()
 
 from agents.graph import compiled_graph  # noqa: E402 — must load after dotenv
+from agents.logging_config import logger
 
 
 class ResearchRequest(BaseModel):
@@ -38,6 +40,8 @@ async def research(request: ResearchRequest):
     if not request.query.strip():
         raise HTTPException(status_code=422, detail="Query must not be empty")
 
+    logger.info(f"POST /research: {request.query}")
+
     initial_state = {
         "query": request.query,
         "sub_questions": [],
@@ -49,8 +53,10 @@ async def research(request: ResearchRequest):
     try:
         result = await compiled_graph.ainvoke(initial_state)
     except Exception as exc:
+        logger.error(f"Graph execution failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    logger.info(f"Research complete: {len(result['sources'])} sources cited")
     return ResearchResponse(
         query=request.query,
         final_answer=result["final_answer"],
