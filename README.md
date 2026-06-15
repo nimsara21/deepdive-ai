@@ -111,6 +111,49 @@ Clear all cached entries:
 {"message": "Cache cleared"}
 ```
 
+### `POST /research/stream`
+
+Stream research progress and final answer in real-time using newline-delimited JSON.
+
+**Request:**
+```json
+{"query": "What is machine learning?"}
+```
+
+**Response stream (NDJSON):**
+```json
+{"event": "planning", "query": "What is machine learning?"}
+{"event": "searching", "sub_questions": [...], "num_results": 15}
+{"event": "summarizing"}
+{"event": "token", "data": "Machine"}
+{"event": "token", "data": " learning"}
+{"event": "token", "data": " is"}
+...
+{"event": "complete", "sources": ["https://...", "https://..."]}
+```
+
+**Events:**
+- `planning` — planner is decomposing the query
+- `searching` — search results gathered
+- `summarizing` — Claude is synthesizing the answer
+- `token` — single token of the final answer (stream these to show real-time typing)
+- `complete` — done, includes sources
+- `cached` — result was cached (entire response in one event)
+- `error` — something went wrong
+
+**Example: curl with jq to pretty-print**
+```bash
+curl -X POST http://localhost:8000/research/stream \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is machine learning?"}' \
+  | jq -R 'fromjson?' 2>/dev/null
+```
+
+**Example: Python client**
+```bash
+python examples_stream_client.py "What is machine learning?"
+```
+
 ## Project Structure
 
 ```
@@ -119,13 +162,15 @@ deepdive-ai/
 │   ├── state.py          # AgentState Typedicts
 │   ├── planner.py        # Query decomposition node
 │   ├── search.py         # Parallel Tavily search nodes
-│   ├── summarizer.py     # Result synthesis node
+│   ├── summarizer.py     # Result synthesis node (+ streaming variant)
 │   ├── graph.py          # LangGraph wiring
 │   ├── cache.py          # Response caching with TTL
 │   ├── retry.py          # Exponential backoff retry logic
 │   └── logging_config.py # Structured logging
 ├── api/
-│   └── main.py           # FastAPI app
+│   └── main.py           # FastAPI app (+ streaming endpoint)
+├── examples/
+│   └── stream_client.py  # Example streaming client
 ├── tests/
 │   ├── conftest.py       # Pytest fixtures
 │   ├── test_planner.py   # Planner unit tests
@@ -146,7 +191,29 @@ pytest tests/
 pytest tests/ --cov=agents --cov-report=html
 ```
 
-## Example Queries
+## Streaming vs Non-Streaming
+
+**`POST /research` (non-streaming):**
+- Waits for full pipeline to complete
+- Returns single JSON response
+- Simpler for clients
+- Good for: batch processing, APIs that need final result only
+
+**`POST /research/stream` (streaming):**
+- Returns events as they happen
+- Shows real-time progress to user
+- Tokens stream as Claude writes the answer
+- Good for: web UIs, real-time feedback, better UX
+
+**When to use streaming:**
+- User is waiting in real-time (web browser)
+- Query is complex and takes 10+ seconds
+- Want to show "typing" effect of Claude's response
+
+**When NOT to use streaming:**
+- Batch/automated processing
+- Client can't handle newline-delimited JSON
+- Need traditional request/response cycle
 
 ### 1. Technical Deep-Dive
 ```bash
@@ -252,7 +319,7 @@ Retry configuration is built-in with sensible defaults. For custom retry behavio
 
 - [x] Response caching — cache recent queries with TTL
 - [x] Better error recovery — retry logic with exponential backoff for transient failures
-- [ ] Streaming responses — stream the final answer as it's generated
+- [x] Streaming responses — stream the final answer as it's generated
 - [ ] Configuration file — move hardcoded values (model names, search depth) to `config.yaml`
 - [ ] Conversation history — accept `previous_context` to enable follow-up questions
 - [ ] Source ranking — deduplicate and rank sources by relevance/authority

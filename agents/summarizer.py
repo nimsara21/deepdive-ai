@@ -1,4 +1,5 @@
 import logging
+from typing import Generator
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -63,3 +64,26 @@ def summarizer_node(state: AgentState) -> dict:
         "final_answer": response.content,
         "sources": sources,
     }
+
+
+@with_retry(RetryConfig(max_retries=3, initial_delay=1.0))
+def summarizer_stream(state: AgentState) -> Generator[str, None, tuple[list[str], str]]:
+    """
+    Streaming version: yields tokens from Claude's response one at a time.
+    Returns (sources, full_answer) after streaming completes.
+    """
+    logger.info(f"Summarizing {len(state['search_results'])} search results (streaming)")
+    context, sources = _build_context(state)
+
+    full_answer = ""
+    with _llm.stream([
+        SystemMessage(content=_SYSTEM),
+        HumanMessage(content=context),
+    ]) as stream:
+        for chunk in stream:
+            token = chunk.content
+            full_answer += token
+            yield token
+
+    logger.info(f"Generated final answer with {len(sources)} sources (streaming)")
+    return sources, full_answer
